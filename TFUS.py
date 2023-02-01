@@ -1,12 +1,13 @@
 import paramiko
 import os
 import json
+import getpass
+import time
 
 #Config
 Config = {
-    "IPAdress" : "",
+    "ConnectionURL" : "",
     "Username" : "",
-    "Password" : "",
     "FileName" : "",
     "Arduino" : ""
 }
@@ -15,32 +16,38 @@ Config = {
 configFile = open("TFUSConfig.txt", "a")
 configFile = open('TFUSConfig.txt', 'r')
 configFileText = configFile.read()
-if configFileText != "":
+if configFileText != "" or input("U wanna change the saved values?[Y/N]: ") == "N":
     config = json.loads(configFileText)
-    Config["IPAdress"] = config["IPAdress"]
+    Config["ConnectionURL"] = config["ConnectionURL"]
     Config["Username"] = config["Username"]
-    Config["Password"] = config["Password"]
     Config["FileName"] = config["FileName"]
     Config["Arduino"] = config["Arduino"]
+    del config
 else:
-    Config["IPAdress"] = input("Enter IP-Adress: ")
+    Config["ConnectionURL"] = input("Enter Connection URL: ")
     Config["Username"] = input("Enter Username: ")
-    Config["Password"] = input("Enter password: ")
+    Config["Password"] = getpass.getpass("Whats your password?")
     Config["FileName"] = input("File Name: ")
     Config["Arduino"] = input("Arduino Processor(Uno: m328p): ")
-    configFile.write(json.dumps(Config))
-
+del configFile
 #SSH FT
-client = paramiko.SSHClient()
-client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-client.connect(hostname = Config["IPAdress"],username=Config["Username"], password=Config["Password"])
-sftp = client.open_sftp()
-sftp.put(os.path.join(os.getcwd(), Config["FileName"]), '/home/' + Config["Username"] + "/" + Config["FileName"])
+try:
+    client = paramiko.SSHClient()
+    client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    client.connect(hostname="tcp://4.tcp.eu.ngrok.io:15480", port=22, username=Config["Username"], password=Config["Password"]) #hostname = Config["ConnectionURL"]
+    sftp = client.open_sftp()
+    sftp.put(os.path.join(os.getcwd(), Config["FileName"]), '/home/' + Config["Username"] + "/" + Config["FileName"])
 
-#SSH Exec
-stdin, stdout, stderr = client.exec_command('sudo avrdude -p ' + Config["Arduino"] + ' -c arduino -P /dev/ttyACM0 -b 115200 -U flash:w:' + Config["FileName"])
-stdin.close()
-client.close()
-
+    #SSH Exec
+    stdin, stdout, stderr = client.exec_command('sudo avrdude -p ' + Config["Arduino"] + ' -c arduino -P /dev/ttyACM0 -b 115200 -U flash:w:' + Config["FileName"])
+    print("Script sent to Arduino successfully!")
+    stdin.close()
+    newOutput = stdout.read()
+    while newOutput != "END;":
+        print (newOutput)
+        newOutput = stdout.read()
+    client.close()
+except:
+    print("An Error occurred during the connection process")
 #sudo avrdude -p m328p -c arduino -P /dev/ttyACM0 -b 115200 -U flash:w:Test.ino.hex
 
